@@ -1,45 +1,58 @@
 package com.example.Spring_Vlastelin_bot.parser;
-
+import java.io.IOException;
+import java.util.Scanner;
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
 import org.jsoup.select.Elements;
 
-import java.io.IOException;
+public class TicketParser {
+    public static void main(String[] args) {
+        // IDs городов
+        String fromCityId = "271";
+        String toCityId = "268";
 
-public class TicketParser {  // Добавляем класс
+        // Ввод даты вручную
+        Scanner scanner = new Scanner(System.in);
+        System.out.print("Введите дату (например, 9.10.2024): ");
+        String date = scanner.nextLine();
 
-    public static void main(String[] args) throws IOException {
-        // Подключаемся к веб-странице
-        Document document = Jsoup.connect("https://xn--64-6kcadcgv0a4axp4bhes.xn--p1ai/")
-                .userAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.3")
-                .get();
+        // Формируем URL с введенной датой
+        String url = String.format("https://xn--64-6kcadcgv0a4axp4bhes.xn--p1ai/Tickets/Search?departurePointId=%s&destinationPointId=%s&date=%s&sortType=DepartureTime", fromCityId, toCityId, date);
 
-        // Выбор всех элементов с классом tickets__item
-        Elements tickets = document.select("div.tickets__item");
+        // Отправляем запрос и парсим результат
+        try {
+            // Получаем HTML-код страницы
+            Document doc = Jsoup.connect(url).get();
 
-        // Обработка каждого билета
-        for (Element ticket : tickets) {
-            // Извлечение времени отправления и прибытия
-            String departureDate = ticket.select("div.tickets__from div.tickets__date").text();
-            String departureTime = ticket.select("div.tickets__from div.tickets__time").text();
-            String arrivalDate = ticket.select("div.tickets__to div.tickets__date").text();
-            String arrivalTime = ticket.select("div.tickets__to div.tickets__time").text();
+            // Находим элементы с классом tickets__item
+            Elements tickets = doc.select(".tickets__item");
 
-            // Извлечение стоимости и времени в пути
-            String priceText = ticket.select("div.tickets__priceNum").text();
-            String travelTime = ticket.select("div.tickets__Movetime .tickets__timeNum").text();
+            // Перебираем каждый элемент билета
+            for (Element ticket : tickets) {
+                // Извлекаем информацию об отправлении и прибытии
+                String departureDate = ticket.select(".tickets__from .tickets__date").text();
+                String departureTime = ticket.select(".tickets__from .tickets__time").text();
+                String arrivalDate = ticket.select(".tickets__to .tickets__date").text();
+                String arrivalTime = ticket.select(".tickets__to .tickets__time").text();
 
-            // Преобразование стоимости в целое число, удаляя символы
-            int price = Integer.parseInt(priceText.replaceAll("[^0-9]", ""));
+                // Извлекаем стоимость и время в пути
+                String price = ticket.select(".tickets__priceNum").text();
+                String travelTime = ticket.select(".tickets__Movetime .tickets__timeNum").text();
 
-            // Печать информации о билете
-            System.out.println("Отправление: " + departureDate + " " + departureTime);
-            System.out.println("Прибытие: " + arrivalDate + " " + arrivalTime);
-            System.out.println("Стоимость: " + price + " рублей");
-            System.out.println("Время в пути: " + travelTime);
-            System.out.println("--------------");
+                // Выводим результаты
+                System.out.println("Дата отправления: " + departureDate);
+                System.out.println("Время отправления: " + departureTime);
+                System.out.println("Дата прибытия: " + arrivalDate);
+                System.out.println("Время прибытия: " + arrivalTime);
+                System.out.println("Стоимость: " + price);
+                System.out.println("Время в пути: " + travelTime);
+                System.out.println("---------");
+            }
+        } catch (IOException e) {
+            System.out.println("Ошибка при попытке получить данные: " + e.getMessage());
         }
     }
 }
+
 

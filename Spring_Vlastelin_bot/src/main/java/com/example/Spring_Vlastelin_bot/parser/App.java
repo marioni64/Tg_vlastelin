@@ -37,51 +37,82 @@ public class App {
         return cities;
     }
 
+
+
     // Метод для парсинга данных о билетах
-    public String findTickets(String fromCityId, String toCityId, String date) {
-        StringBuilder result = new StringBuilder();
+    public Map<Integer, String > findTickets(String fromCityId, String toCityId, String date) {
 
+        Map<Integer, String > ticketDetails = new HashMap<>();
+
+
+
+        String searchUrl = String.format("https://xn--64-6kcadcgv0a4axp4bhes.xn--p1ai/Tickets/Search?departurePointId=%s&destinationPointId=%s&date=%s&sortType=DepartureTime", fromCityId, toCityId, date);
+
+        System.out.println(searchUrl);
         try {
-            // Подключаемся к странице с билетами
-            String searchUrl = "https://xn--64-6kcadcgv0a4axp4bhes.xn--p1ai/Tickets/Search?departurePointId=%s&destinationPointId=%s&date=%s&sortType=DepartureTime"  + fromCityId +
-            "&destinationPointId=" + toCityId + "&date=" + date + "&sortType=DepartureTime";
-            Document searchResults = Jsoup.connect(searchUrl)
-                    .userAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.3")
-                    .get();
 
+            Document searchResults = Jsoup.connect(searchUrl).get();
             Elements tickets = searchResults.select("div.tickets__item");
 
-            if (tickets.isEmpty()) {
-                return "Нет доступных билетов на указанную дату.";
-            }
 
-            for (Element ticket : tickets) {
-                String departureDate = ticket.select("div.tickets__from div.tickets__date").text();
-                String departureTime = ticket.select("div.tickets__from div.tickets__time").text();
-                String arrivalDate = ticket.select("div.tickets__to div.tickets__date").text();
-                String arrivalTime = ticket.select("div.tickets__to div.tickets__time").text();
-                String priceText = ticket.select("div.tickets__priceNum").text();
-                String travelTime = ticket.select("div.tickets__Movetime .tickets__timeNum").text();
+            int count = 1;
+            for(Element ticket : tickets){
 
-                // Проверка на наличие данных
-                if (departureDate.isEmpty() || departureTime.isEmpty() || arrivalDate.isEmpty() || arrivalTime.isEmpty() || priceText.isEmpty() || travelTime.isEmpty()) {
+                String departureDate = ticket.select(".tickets__from .tickets__date").text();
+                String departureTime = ticket.select(".tickets__from .tickets__time").text();
+                String arrivalDate = ticket.select(".tickets__to .tickets__date").text();
+                String arrivalTime = ticket.select(".tickets__to .tickets__time").text();
+                String priceChen = ticket.select(".tickets__priceNum").text();
+                String travelTime = ticket.select(".tickets__Movetime .tickets__timeNum").text();
+
+                if (departureDate.isEmpty() || departureTime.isEmpty() || arrivalDate.isEmpty() || arrivalTime.isEmpty() || priceChen.isEmpty() || travelTime.isEmpty()) {
                     continue; // Пропускаем билет, если отсутствуют данные
                 }
 
-                int price = Integer.parseInt(priceText.replaceAll("[^0-9]", ""));
+                int price = Integer.parseInt(priceChen.replaceAll("[^0-9]", ""));
 
-                result.append("Отправление: ").append(departureDate).append(" ").append(departureTime).append("\n")
-                        .append("Прибытие: ").append(arrivalDate).append(" ").append(arrivalTime).append("\n")
-                        .append("Стоимость: ").append(price).append(" рублей\n")
-                        .append("Время в пути: ").append(travelTime).append("\n")
-                        .append("--------------\n");
+                String ticketInfo = "Отправление: " + departureDate + " " + departureTime + "\n" +
+                        "Прибытие: " + arrivalDate + " " + arrivalTime + "\n" +
+                        "Стоимость: " + price + " рублей\n" +
+                        "Время в пути: " + travelTime + "\n" +
+                        "--------------\n";
+
+                ticketDetails.put(count, ticketInfo);
+                count ++;
+            }
+        } catch (IOException e) {
+            System.err.println("Ошибка при поиске билетов: " + e.getMessage());
+            ticketDetails.put(0, "Ошибка при поиске билетов.");
+        }
+        return ticketDetails;
+    }
+
+
+
+    public Map<Integer, String > getAvailLableSeats( String tripId, String departureTime){
+        Map<Integer, String > availLableSeats = new HashMap<>();
+        String seatUrl = String.format("https://xn--64-6kcadcgv0a4axp4bhes.xn--p1ai/Tickets/TripInfo?tripId=%s&departureTime=%s", tripId, departureTime);
+
+        try{
+            Document seatDocument = Jsoup.connect(seatUrl).get();
+            Elements seats = seatDocument.select(".scheme_tile");
+
+            int count = 1;
+            for (Element seat : seats){
+                String seatNumber = seat.text();
+
+                if (!seat.className().contains("sold")){
+                    availLableSeats.put(count, seatNumber);
+                    count ++ ;
+                }
             }
 
         } catch (IOException e) {
-            System.err.println("Ошибка при поиске билетов: " + e.getMessage());
-            return "Ошибка при поиске билетов.";
+            System.err.println("Error for get scheme" + e.getMessage());
         }
+        return availLableSeats;
 
-        return result.toString();
     }
+
 }
+

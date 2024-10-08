@@ -96,13 +96,26 @@ public class TelegramBot extends TelegramLongPollingBot {
 
                 case "to":
                     selectedToCity = callBackData.split(":")[1];
-                    sendMessage(chatId, "Вы выбрали города. Пожалуйста, введите дату поездки в формате YYYY.MM.DD:");
+                    sendMessage(chatId, "Вы выбрали города. Пожалуйста, введите дату поездки в формате DD.MM.YYYY:");
                     DeleteMessageChat(chatId, messageId);
                     break;
 
                 case "back_to_cities":  // Логика возврата назад
                     resetSelectedCities();  // Сбрасываем выбранные города
                     sendMainMenu(chatId, update.getCallbackQuery().getFrom().getFirstName());
+                    DeleteMessageChat(chatId, messageId);
+                    break;
+
+                case "select_ticket": // Обработка выбора билета
+                    int ticketNumber = Integer.parseInt(callBackData.split("_")[2]);
+                    selectTicket(chatId, ticketNumber); // Метод для обработки выбора билета
+                    break;
+
+                case "select_seat": // Обработка выбора места
+                    String selectedSeat = callBackData.split(":")[1];
+                    String tripId = callBackData.split(":")[2];
+                    String departureTime = callBackData.split(":")[3];
+                    confirmSeatSelection(chatId, selectedSeat, tripId, departureTime);
                     DeleteMessageChat(chatId, messageId);
                     break;
 
@@ -113,6 +126,15 @@ public class TelegramBot extends TelegramLongPollingBot {
 
         }
 
+    }
+    private void selectTicket(long chatId, int ticketNumber) {
+        // Здесь вы можете сделать что-то с выбранным билетом
+        sendMessage(chatId, "Вы выбрали билет номер " + ticketNumber + ". Спасибо за выбор!");
+    }
+
+    private void confirmSeatSelection(long chatId, String selectedSeat, String tripId, String departureTime) {
+        // Здесь вы можете реализовать логику подтверждения выбора места
+        sendMessage(chatId, "Вы выбрали место номер " + selectedSeat + ".\nTrip ID: " + tripId + "\nDeparture Time: " + departureTime);
     }
     private void resetSelectedCities() {
         selectedFromCity = null;
@@ -226,21 +248,110 @@ public class TelegramBot extends TelegramLongPollingBot {
         commands.setBotCommands();
     }
 
-    private void searchTickets(long chatId, String fromCityId, String toCityId){
-        if (selectedDate == null) {
-            sendMessage(chatId, "Пожалуйста, введите дату.");
+    private void searchTickets(long chatId, String fromCityId, String toCityId) {
+
+
+        if (selectedDate == null || !isValidDate(selectedDate)) {
+            sendMessage(chatId, "Пожалуйста, введите корректную дату в формате ДД.ММ.ГГГГ.");
             return;
+        }
+
+
+        Map<Integer, String> ticketsInfo = app.findTickets(fromCityId, toCityId, selectedDate);
+
+        StringBuilder ticketDetails = new StringBuilder();
+
+        if (ticketsInfo == null || ticketsInfo.isEmpty()) {
+            sendMessage(chatId, "Не найдены билеты на указанную дату.");
+        } else {
+            // Создаем объект InlineKeyboardMarkup для кнопок
+            InlineKeyboardMarkup inlineKeyboardMarkup = new InlineKeyboardMarkup();
+
+            List<List<InlineKeyboardButton>> buttons = new ArrayList<>();
+
+            for (Map.Entry<Integer, String> entry : ticketsInfo.entrySet()) {
+                String ticketInfo = entry.getValue(); // информация о билете
+                int ticketNumber = entry.getKey();
+
+                ticketDetails.append("Билет ").append(ticketNumber).append(":\n").append(ticketInfo).append("\n");
+
+                // Создаем кнопку для выбора билета
+                InlineKeyboardButton button = new InlineKeyboardButton();
+                button.setText("Выбрать билет " + ticketNumber);
+                button.setCallbackData("select_ticket_" + ticketNumber); // задаем callback_data
+
+                List<InlineKeyboardButton> row = new ArrayList<>();
+                row.add(button);
+                buttons.add(row);
+            }
+
+            inlineKeyboardMarkup.setKeyboard(buttons);
+
+            // Отправляем сообщение с кнопками
+            sendMessageWithInlineKeyboard(chatId, ticketDetails.toString(), inlineKeyboardMarkup);
+            sendMessage(chatId, "В разработке");
+        }
+    }
+
+    // Метод для отправки сообщения с InlineKeyboard
+    private void sendMessageWithInlineKeyboard(long chatId, String text, InlineKeyboardMarkup inlineKeyboard) {
+
+        SendMessage message = new SendMessage();
+
+        message.setChatId(String.valueOf(chatId));
+        message.setText(text);
+        message.setReplyMarkup(inlineKeyboard);
+
+        try {
+            execute(message);
+        } catch (TelegramApiException e) {
+            e.printStackTrace();
+        }
+    }
+
+    private void selectTicket(long chatId, String tripId, String departureTime) {
+        Map<Integer, String > avaiLableSeats = app.getAvailLableSeats(tripId, departureTime);
+
+        if (avaiLableSeats.isEmpty()){
+            sendMessage(chatId, "К сожалению, места не найдены для этого билета.");
+        }else {
+
+            InlineKeyboardMarkup inlineKeyboardMarkup = new InlineKeyboardMarkup();
+            List<List<InlineKeyboardButton>> buttons = new ArrayList<>();
+
+            StringBuilder seatDetails = new StringBuilder("Доступные места:\n");
+
+            for (Map.Entry<Integer, String > entry : avaiLableSeats.entrySet()){
+
+                String seatNumber = entry.getValue();
+                int seatIndex = entry.getKey();
+
+                seatDetails.append("Место ").append(seatNumber).append("\n");
+
+                InlineKeyboardButton button = new InlineKeyboardButton();
+                button.setText("Выбрать место" + seatNumber);
+                button.setCallbackData("select_seat:" + seatNumber + ":" + tripId + ":" + departureTime);
+
+                List<InlineKeyboardButton> row = new ArrayList<>();
+
+                row.add(button);
+                buttons.add(row);
+            }
+            inlineKeyboardMarkup.setKeyboard(buttons);
+            sendMessageWithInlineKeyboard(chatId, seatDetails.toString(), inlineKeyboardMarkup);
+
 
         }
-        String ticketsInfo = app.findTickets(fromCityId, toCityId, selectedDate);
-        sendMessage(chatId, ticketsInfo);
     }
+
+
 
     // Метод для проверки корректности введенной даты
     private boolean isValidDate(String date) {
-        String datePattern = "\\d{4}.\\d{2}.\\d{2}"; // Регулярное выражение для формата YYYY-MM-DD
+        String datePattern = "\\d{2}.\\d{2}.\\d{4}"; // Регулярное выражение для формата DD-MM-YYYY
         return date.matches(datePattern);
     }
+
 
 
 
@@ -293,6 +404,9 @@ public class TelegramBot extends TelegramLongPollingBot {
         inlineKeyboardMarkup.setKeyboard(KeyBoard);
         return inlineKeyboardMarkup;
     }
+
+
+
 
 
 
